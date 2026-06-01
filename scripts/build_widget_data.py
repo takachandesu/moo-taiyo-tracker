@@ -25,7 +25,9 @@ NOTABLE_FILERS   = "data/notable_filers.txt"
 OUT_JSON_LOCAL   = "taiyo-data.json"
 
 # widget の CONFIG.dataUrl と一致させる: /wp-content/uploads/heatmaps/taiyo-data.json
-DATA_REMOTE_DIR  = "wp-content/uploads/heatmaps"
+# ★ロリポップはログイン直後がルート(moo-stock-blog と wp-content が並ぶ場所)。
+#   サイト本体は moo-stock-blog フォルダの中なので、その配下を指定する。
+DATA_REMOTE_DIR  = "moo-stock-blog/wp-content/uploads/heatmaps"
 DATA_REMOTE_NAME = "taiyo-data.json"
 
 FTP_HOST = os.environ.get("LOLIPOP_FTP_HOST", "")
