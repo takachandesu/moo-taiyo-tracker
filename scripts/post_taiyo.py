@@ -48,7 +48,7 @@ X_KEYS = {k: os.environ.get(k, "") for k in
 FTP_HOST = os.environ.get("LOLIPOP_FTP_HOST", "")
 FTP_USER = os.environ.get("LOLIPOP_FTP_USER", "")
 FTP_PASS = os.environ.get("LOLIPOP_FTP_PASSWORD", "")
-FTP_PATH = os.environ.get("LOLIPOP_FTP_PATH", "")
+FTP_PATH = os.environ.get("LOLIPOP_FTP_PATH", "") or "moo-stock-blog"  # 未設定ならサイト本体フォルダ
 
 
 def log(*a): print("[taiyo-tweet]", *a, flush=True)
