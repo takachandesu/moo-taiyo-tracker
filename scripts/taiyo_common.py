@@ -43,27 +43,41 @@ def now_jst() -> dt.datetime:
 # ─────────────────────────────────────────────────────────────
 # 入力ファイルの読み込み
 # ─────────────────────────────────────────────────────────────
+def _read_text_auto(path: str) -> str:
+    """CP932(Shift-JIS)を第一候補に、UTF-8(BOM付き含む)へ自動フォールバックして読む。
+    EDINETコードリストは本来CP932だが、Excel等で開いて保存し直すとUTF-8化することがあるため。"""
+    raw = open(path, "rb").read()
+    for enc in ("cp932", "utf-8-sig", "utf-8"):
+        try:
+            return raw.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("cp932", errors="replace")   # 最後の保険
+
+
 def load_edinet_map(path: str = DEFAULT_EDINETCODE_CSV) -> dict:
-    """EDINETコードリスト(CP932)から EDINETコード → (証券コード4桁, 会社名)。"""
+    """EDINETコードリスト(CP932/UTF-8どちらでも)から EDINETコード → (証券コード4桁, 会社名)。"""
     if not os.path.exists(path):
-        sys.exit(f"EDINETコードリストがありません: {path} を配置してください(Shift-JIS)")
+        sys.exit(f"EDINETコードリストがありません: {path} を配置してください")
     mp = {}
-    with open(path, encoding="cp932", errors="replace", newline="") as f:
-        next(f, None)  # 1行目はダウンロード実行日時などのメタ行
-        reader = csv.DictReader(f)
-        ec_key = sec_key = name_key = None
-        for col in reader.fieldnames or []:
-            if "ＥＤＩＮＥＴコード" in col: ec_key = col
-            elif "証券コード" in col:      sec_key = col
-            elif "提出者名" in col:        name_key = col
-        if not (ec_key and sec_key):
-            sys.exit("EDINETコードリストのヘッダーを認識できませんでした")
-        for row in reader:
-            ec  = (row.get(ec_key)  or "").strip()
-            sec = (row.get(sec_key) or "").strip()
-            name = (row.get(name_key) or "").strip() if name_key else ""
-            if ec and sec:
-                mp[ec] = (sec[:4], name)   # 証券コードは5桁(末尾0)→4桁
+    text = _read_text_auto(path)
+    lines = text.splitlines()
+    if lines and lines[0].startswith("ダウンロード実行日"):
+        lines = lines[1:]              # 1行目のメタ行を除去
+    reader = csv.DictReader(lines)
+    ec_key = sec_key = name_key = None
+    for col in reader.fieldnames or []:
+        if "ＥＤＩＮＥＴコード" in col: ec_key = col
+        elif "証券コード" in col:      sec_key = col
+        elif col.strip() == "提出者名": name_key = col   # 「提出者名(英字)」「提出者名(ヨミ)」を避け漢字名を採用
+    if not (ec_key and sec_key):
+        sys.exit("EDINETコードリストのヘッダーを認識できませんでした")
+    for row in reader:
+        ec  = (row.get(ec_key)  or "").strip()
+        sec = (row.get(sec_key) or "").strip()
+        name = (row.get(name_key) or "").strip() if name_key else ""
+        if ec and sec:
+            mp[ec] = (sec[:4], name)   # 証券コードは5桁(末尾0)→4桁
     return mp
 
 
