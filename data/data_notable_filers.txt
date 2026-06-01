@@ -1,0 +1,92 @@
+# 有名ファンド・投資家リスト(1名称1行・部分一致・英語は大文字小文字無視)
+# 追加・削除自由。後から鉛筆アイコンで編集可。
+
+バリューアクト
+オアシス
+ファラロン
+ヴァレックス
+エスグラントコーポレーション
+ミリ・キャピタル
+エリオット
+ひびきパース
+3Dインベストメント
+レノ
+ダルトン
+NAVF
+エフィッシモ
+effissimo
+strategic capital
+ストラテジックキャピタル
+3d investment
+スリーディー
+silchester
+シルチェスター
+dalton
+elliott
+valueact
+farallon
+palliser
+パリサー
+nippon active value
+ニッポン・アクティブ
+asset value investors
+british empire
+varecs
+ichigo asset
+いちごアセット
+hibiki
+ひびき
+# taiyo は会社名等に広く含まれ誤爆しやすいので、英語綴り単独は避けタイヨウ表記で
+タイヨウ・パシフィック
+rim advisors
+rheim
+miri capital
+yamauchi
+ヤマウチ
+シティインデックスイレブンス
+シティインデックスサード
+シティインデックスファースト
+株式会社レノ
+南青山不動産
+エスグラント
+オフィスサポート
+シーアンドアイ
+フォルティス
+野村絢
+村上絢
+berkshire
+バークシャー
+national indemnity
+ナショナル・インデムニティ
+symphony financial
+シンフォニー・フィナンシャル
+kaname capital
+カナメ・キャピタル
+milestone capital
+マイルストーン
+orbis
+オービス
+midas capital
+ミダスキャピタル
+evo fund
+bcpe
+bain
+carlyle
+Public Investment Fund
+Abu Dhabi Investment Authority
+Mubadala
+Qatar Investment Authority
+Kuwait Investment Authority
+Investment Corporation of Dubai
+ADIA
+ムバダラ
+
+# ↓短い英略語(誤爆しやすいので様子見。不要なら # を付けて無効化)
+c&i
+kkr
+eqt
+ADQ
+PIF
+QIA
+KIA
+ICD
