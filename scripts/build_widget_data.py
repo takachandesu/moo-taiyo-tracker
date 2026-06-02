@@ -61,8 +61,10 @@ def is_notable(r: dict, notable: list) -> bool:
 
 def slim(r: dict) -> dict:
     return {
+        "docID": r["docID"],
         "code": r["code"], "name": r["name"], "filer": r["filer"],
         "isNew": r["isNew"], "ratio": r.get("ratio"), "ratioPrev": r.get("ratioPrev"),
+        "purpose": r.get("purpose"),
         "submit": r["submit"], "docUrl": r.get("docUrl"),
     }
 
@@ -86,6 +88,12 @@ def main():
             reps = [r for r in reps if r["isNew"]]
         all_reports.extend(reps)
         log(f"{date}: {len(reps)} 件(新規取得)")
+
+    # 原本(CSV)から保有割合を全件付与(1件1リクエスト。EDINETに優しく0.2秒間隔)
+    log(f"原本から保有割合を取得中… {len(all_reports)} 件")
+    tc.enrich_with_ratio(all_reports, sleep=0.2)
+    got = sum(1 for r in all_reports if r.get("ratio") is not None)
+    log(f"保有割合 取得済み: {got}/{len(all_reports)} 件")
 
     def panel(reports):
         rs = [slim(r) for r in reports]
