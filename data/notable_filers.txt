@@ -80,6 +80,8 @@ Kuwait Investment Authority
 Investment Corporation of Dubai
 ADIA
 ムバダラ
+Ｏａｓｉｓ
+Ｅｖｏ　Ｆｕｎｄ
 
 # ↓短い英略語(誤爆しやすいので様子見。不要なら # を付けて無効化)
 c&i
