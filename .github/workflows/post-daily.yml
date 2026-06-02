@@ -1,0 +1,49 @@
+name: Taiyo Daily Post
+
+on:
+  schedule:
+    # GitHub cron はUTC・遅延あり。JST 18:00/20:00/22:00 の複数回トライ。
+    # 最初に走った回が記事投稿＆ツイート、以降は posted.json の重複防止で何もしない。
+    # 提出受付は17:15終了なので、何時に走っても当日分は確定している。
+    - cron: "0 9,11,13 * * 1-5"   # UTC 9/11/13 = JST 18/20/22 平日
+  workflow_dispatch: {}
+
+permissions:
+  contents: write           # data/posted.json をコミットバック
+
+concurrency:
+  group: taiyo-daily
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - run: pip install -r requirements.txt
+      - name: Post daily article & tweet
+        env:
+          EDINET_API_KEY:  ${{ secrets.EDINET_API_KEY }}
+          WP_BASE_URL:     ${{ secrets.WP_BASE_URL }}
+          WP_USER:         ${{ secrets.WP_USER }}
+          WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
+          X_API_KEY:       ${{ secrets.X_API_KEY }}
+          X_API_SECRET:    ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN:  ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_SECRET: ${{ secrets.X_ACCESS_SECRET }}
+        run: python scripts/post_daily.py
+      - name: Commit state
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet -- data/posted.json; then
+            git add data/posted.json
+            git commit -m "update posted/tweeted state [skip ci]"
+            git push
+          else
+            echo "no change"
+          fi
