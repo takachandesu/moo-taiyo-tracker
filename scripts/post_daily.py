@@ -122,14 +122,27 @@ def build_title(reports, notable, date_str):
     return f"{date_str} 大量保有報告書（新規取得 {len(reports)}件）"
 
 
-# ── WordPress投稿 ──
+# ── WordPress投稿(タイムアウト耐性: 数回リトライ) ──
 def wp_create_post(title, html):
+    import time
     url = f"{WP_BASE}/wp-json/wp/v2/posts"
-    r = requests.post(url, auth=(WP_USER, WP_PASS),
-                      json={"title": title, "content": html, "status": "publish"},
-                      timeout=60)
-    r.raise_for_status()
-    return r.json().get("link")
+    payload = {"title": title, "content": html, "status": "publish"}
+    last = None
+    # ロリポップは海外IP/混雑で断続的にタイムアウトすることがあるので
+    # 間隔をあけて最大5回トライする(15→30→45→60秒待ち)。
+    for attempt in range(1, 6):
+        try:
+            r = requests.post(url, auth=(WP_USER, WP_PASS), json=payload, timeout=90)
+            r.raise_for_status()
+            return r.json().get("link")
+        except requests.exceptions.RequestException as e:
+            last = e
+            wait = 15 * attempt
+            log(f"WordPress接続 失敗({attempt}/5): {type(e).__name__}。{wait}秒後に再試行")
+            if attempt < 5:
+                time.sleep(wait)
+    raise last
+
 
 
 # ── ツイート組み立て(収まるだけ詰める) ──
