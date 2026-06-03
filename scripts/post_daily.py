@@ -149,7 +149,10 @@ def wp_create_post(title, html):
 def build_tweet(reports, notable, url, date_str):
     hots = [r for r in reports if is_notable(r, notable)]
     hots.sort(key=lambda x: (x.get("ratio") or 0), reverse=True)   # 保有割合が高い順に優先
-    header = f"【著名投資家の大量保有】{date_str[5:]}\n"
+    # ヘッダーに実行時刻(分)を入れて毎回ユニークにする。
+    # Xは似た文面の連投を重複(duplicate)として403で弾くため、その回避。
+    hhmm = tc.now_jst().strftime("%H:%M")
+    header = f"【著名投資家の大量保有】{date_str[5:]} {hhmm}時点\n"
     tail = f"\n詳細▼\n{url}\n{HASHTAGS}"
     # URLはX上23字固定。本文(header+lines)＋tail(URL以外)で概算カウント
     def length(body):
