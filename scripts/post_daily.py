@@ -247,13 +247,18 @@ def main():
         log("注目投資家の新規なし。ツイートはスキップ")
         return
     text = build_tweet(reports, notable, post_url, date_jp)
+    log(f"ツイート本文（{len(text)}字）:\n{text}")
     try:
-        x_client().create_tweet(text=text)
+        resp = x_client().create_tweet(text=text)
         st["tweeted"].append(today)
         save_state(st)
-        log(f"ツイート完了（注目 {len(hots)} 件中、収まるぶん）:\n{text}")
+        log(f"ツイート完了（注目 {len(hots)} 件中、収まるぶん） id={resp.data.get('id')}")
+    except tweepy.Forbidden as e:
+        # 403の詳細(重複 duplicate か、権限 permission かを切り分ける)
+        detail = getattr(e, "api_messages", None) or getattr(e, "api_errors", None) or str(e)
+        log(f"ツイート失敗 403 Forbidden 詳細: {detail}")
     except Exception as e:
-        log(f"ツイート失敗（次回再試行）: {e}")
+        log(f"ツイート失敗（次回再試行）: {type(e).__name__}: {e}")
 
 
 if __name__ == "__main__":
