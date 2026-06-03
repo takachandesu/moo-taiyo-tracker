@@ -171,25 +171,44 @@ def main():
     if miss:
         sys.exit("環境変数が不足: " + ", ".join(miss))
 
-    # 対象日: 原則は当日(JST)。ただしGitHubの遅延で土日早朝に走った場合は
-    # 直近の平日(金など)に寄せて、平日ぶんの取りこぼしを防ぐ。
-    now = tc.now_jst()
-    target = now
-    while target.weekday() >= 5:        # 5=土,6=日 → 直近の平日へ
-        target -= dt.timedelta(days=1)
-    today = target.strftime("%Y-%m-%d")
-    date_jp = target.strftime("%-m月%-d日") if os.name != "nt" else target.strftime("%m月%d日")
     st = load_state()
     notable = load_notable()
-
-    # その日の提出ぶん(新規350)を取得
     ecmap = tc.load_edinet_map()
-    docs = tc.fetch_docs(date=today)
-    reports = [r for r in tc.extract_reports(docs, ecmap) if r["isNew"]]
-    log(f"{today}: 新規取得 {len(reports)} 件")
+
+    # ── 対象日の決定 ──
+    # 実行時刻の日付固定だと、夜間実行/遅延/タイムゾーンで簡単に1日ズレる。
+    # そこで「当日から遡り、初回大量保有(350)が実際に1件以上ある最初の日」を対象にする。
+    # これで何時に走っても、直近で提出があった営業日を自己修正で拾える。
+    now = tc.now_jst()
+    today = None
+    reports = []
+    fallback = None   # 提出はあるが既に投稿済みの直近日(全部投稿済みのときの保険)
+    for back in range(0, 6):                     # 最大6日さかのぼる(連休対策)
+        d = (now - dt.timedelta(days=back))
+        if d.weekday() >= 5:                     # 土日はそもそも提出なし→スキップ
+            continue
+        ds = d.strftime("%Y-%m-%d")
+        docs = tc.fetch_docs(date=ds)
+        reps = [r for r in tc.extract_reports(docs, ecmap) if r["isNew"]]
+        log(f"{ds}: 新規取得 {len(reps)} 件")
+        if not reps:
+            continue
+        if ds in st["posted"]:                   # 既に記事化済みの日はスキップ(取り戻し不要)
+            if fallback is None:
+                fallback = (ds, reps, d)
+            continue
+        today, reports, target = ds, reps, d     # 未投稿で提出がある最初の日を採用
+        break
+
+    if today is None and fallback is not None:
+        # 直近の提出日はすべて投稿済み → その最新日を対象に(ツイート未送なら今日送れる)
+        today, reports, target = fallback
+
     if not reports:
-        log("本日提出なし。記事もツイートもスキップ")
+        log("直近に初回大量保有の提出が見つからず。スキップ")
         return
+    date_jp = target.strftime("%-m月%-d日") if os.name != "nt" else target.strftime("%m月%d日")
+    log(f"対象日: {today}（新規取得 {len(reports)} 件）")
 
     # 保有割合を付与
     tc.enrich_with_ratio(reports, sleep=0.2)
