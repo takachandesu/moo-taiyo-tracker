@@ -31,6 +31,7 @@ CATEGORY       = "未分類"
 HASHTAGS       = "#大量保有 #日本株"
 TWEET_LIMIT    = 280   # Xの重み付き上限(全角=2,半角=1)
 URL_WEIGHT     = 23    # XはURLを t.co 短縮で一律23として数える
+WIDGET_PAGE    = "https://moo-stock-blog.com/著名アクティビストの大量保有報告書/"  # 全件が見える固定ページ
 
 WP_BASE = os.environ.get("WP_BASE_URL", "").rstrip("/")
 WP_USER = os.environ.get("WP_USER", "")
@@ -95,32 +96,38 @@ def pct(x):
 
 # ── 記事本文(HTML)を組み立て ──
 def build_html(reports, notable, date_str):
+    total = len(reports)
     n_notable = sum(1 for r in reports if is_notable(r, notable))
+    # 繰り返しのインラインstyleをやめ、先頭のCSS1か所に集約してHTMLを軽量化。
+    css = ('<style>.taiyo-tbl{border-collapse:collapse;width:100%;font-size:14px;}'
+           '.taiyo-tbl th,.taiyo-tbl td{border:1px solid #e0e0e0;padding:5px 8px;}'
+           '.taiyo-tbl th{background:#f5f5f5;}'
+           '.taiyo-tbl .r{text-align:right;}'
+           '.taiyo-tbl tr.hot{background:#fbeaea;}'
+           '.taiyo-tbl tr.hot .nm{color:#c0392b;font-weight:bold;}</style>')
     head = (f"<p>{esc(date_str)}に提出された大量保有報告書（新規取得）の一覧です。"
-            f"全{len(reports)}件、うち著名投資家による提出が{n_notable}件。"
-            f"保有割合は各報告書の原本（EDINET）に基づきます。</p>")
-    rows = []
-    rows.append("<table><thead><tr>"
-                "<th>提出</th><th>銘柄</th><th>提出者（大量保有者）</th>"
-                "<th>保有割合</th><th>保有目的</th><th>原本</th></tr></thead><tbody>")
+            f"全{total}件、うち著名投資家・アクティビストによる提出が{n_notable}件"
+            f"（行を赤色で強調）。保有割合は各報告書の原本（EDINET）に基づきます。</p>")
+    rows = ["<table class='taiyo-tbl'><thead><tr>"
+            "<th>提出</th><th>銘柄</th><th>提出者（大量保有者）</th>"
+            "<th>保有割合</th><th>保有目的</th><th>原本</th></tr></thead><tbody>"]
     for r in sorted(reports, key=lambda x: x.get("submit",""), reverse=True):
         hot = is_notable(r, notable)
-        style = ' style="background:#fbeaea;"' if hot else ""
+        tr = "<tr class='hot'>" if hot else "<tr>"
         star = "★" if hot else ""
-        nm = f'<strong style="color:#c0392b;">{star}{esc(r["name"])}</strong>' if hot else f'<strong>{esc(r["name"])}</strong>'
         doc = f'<a href="{esc(r["docUrl"])}" target="_blank" rel="noopener">原本</a>' if r.get("docUrl") else "—"
         t = (r.get("submit","") or "")[5:16].replace("-", "/")
         rows.append(
-            f'<tr{style}><td>{esc(t)}</td>'
-            f'<td>{esc(r["code"])} {nm}</td>'
+            f'{tr}<td>{esc(t)}</td>'
+            f'<td>{esc(r["code"])} <span class="nm">{star}{esc(r["name"])}</span></td>'
             f'<td>{esc(r["filer"])}</td>'
-            f'<td style="text-align:right;">{pct(r.get("ratio"))}</td>'
+            f'<td class="r">{pct(r.get("ratio"))}</td>'
             f'<td>{esc(r.get("purpose") or "—")}</td>'
             f'<td>{doc}</td></tr>')
     rows.append("</tbody></table>")
     foot = ('<p style="font-size:12px;color:#666;">出典: EDINET（金融庁 電子開示システム）。'
             '提出時刻はJST。投資判断はご自身の責任で行ってください。</p>')
-    return head + "\n".join(rows) + foot
+    return css + head + "".join(rows) + foot
 
 
 def build_title(reports, notable, date_str):
