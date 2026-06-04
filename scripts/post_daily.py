@@ -26,9 +26,11 @@ import tweepy
 
 NOTABLE_FILERS = "data/notable_filers.txt"
 POSTED_JSON    = "data/posted.json"
+TWEET_EXCLUDE  = "data/tweet_exclude.txt"   # 注目だが「ツイートはしない」提出者(記事・ウィジェットには残る)
 CATEGORY       = "未分類"
 HASHTAGS       = "#大量保有 #日本株"
-TWEET_LIMIT    = 260   # 全角換算の安全枠(URL23字ぶんは別途考慮し本文を短めに)
+TWEET_LIMIT    = 280   # Xの重み付き上限(全角=2,半角=1)
+URL_WEIGHT     = 23    # XはURLを t.co 短縮で一律23として数える
 
 WP_BASE = os.environ.get("WP_BASE_URL", "").rstrip("/")
 WP_USER = os.environ.get("WP_USER", "")
@@ -64,9 +66,22 @@ def load_notable() -> list:
     return []
 
 
+def load_exclude() -> list:
+    """ツイート除外リスト(記事・ウィジェットには残すが、ツイートには出さない提出者)。"""
+    if os.path.exists(TWEET_EXCLUDE):
+        with open(TWEET_EXCLUDE, encoding="utf-8") as f:
+            return [l.strip() for l in f if l.strip() and not l.startswith("#")]
+    return []
+
+
 def is_notable(r, notable):
     filer = (r.get("filer") or "").lower()
     return any(k.lower() in filer for k in notable)
+
+
+def is_tweet_excluded(r, exclude):
+    filer = (r.get("filer") or "").lower()
+    return any(k.lower() in filer for k in exclude)
 
 
 def esc(s):
@@ -145,32 +160,43 @@ def wp_create_post(title, html):
 
 
 
+# ── Xの重み付き文字数(全角=2,半角=1, URLは23) ──
+def x_weighted_len(text, url):
+    t = text.replace(url, "x" * URL_WEIGHT)   # URLは23固定として数える
+    w = 0
+    for ch in t:
+        cp = ord(ch)
+        if (0x1100 <= cp <= 0x115F or 0x2E80 <= cp <= 0x303E or
+            0x3041 <= cp <= 0x33FF or 0x3400 <= cp <= 0x4DBF or
+            0x4E00 <= cp <= 0x9FFF or 0xA000 <= cp <= 0xA4CF or
+            0xAC00 <= cp <= 0xD7A3 or 0xF900 <= cp <= 0xFAFF or
+            0xFE30 <= cp <= 0xFE4F or 0xFF00 <= cp <= 0xFF60 or
+            0xFFE0 <= cp <= 0xFFE6 or cp >= 0x1F000):
+            w += 2
+        else:
+            w += 1
+    return w
+
+
 # ── ツイート組み立て(収まるだけ詰める) ──
-def build_tweet(reports, notable, url, date_str):
-    hots = [r for r in reports if is_notable(r, notable)]
-    hots.sort(key=lambda x: (x.get("ratio") or 0), reverse=True)   # 保有割合が高い順に優先
-    # ヘッダーに実行時刻(分)を入れて毎回ユニークにする。
-    # Xは似た文面の連投を重複(duplicate)として403で弾くため、その回避。
+def build_tweet(tweet_hots, url, date_str):
+    hots = sorted(tweet_hots, key=lambda x: (x.get("ratio") or 0), reverse=True)  # 保有割合が高い順
+    # ヘッダーに実行時刻(分)を入れて毎回ユニークにする(重複403回避)。
     hhmm = tc.now_jst().strftime("%H:%M")
     header = f"【著名投資家の大量保有】{date_str[5:]} {hhmm}時点\n"
     tail = f"\n詳細▼\n{url}\n{HASHTAGS}"
-    # URLはX上23字固定。本文(header+lines)＋tail(URL以外)で概算カウント
-    def length(body):
-        # 全角1/半角0.5のざっくり換算 + URL固定23
-        n = 0
-        for ch in body:
-            n += 1 if ord(ch) > 0x7f else 0.5
-        return n + 23 + 10  # URL23 + ハッシュタグ等の余白
-    lines, used = [], header
+    # 行を1件ずつ足し、ヘッダー+行+末尾の合計がXの上限(280)に収まる範囲だけ採用
+    lines = []
     for r in hots:
-        line = f'★{r["filer"][:14]}→{r["name"][:12]}({r["code"]}) {pct(r.get("ratio"))}\n'
-        if length(used + line) <= TWEET_LIMIT:
-            lines.append(line); used += line
+        line = f'★{r["filer"][:12]}→{r["name"][:10]}({r["code"]}) {pct(r.get("ratio"))}\n'
+        candidate = header + "".join(lines) + line + tail
+        if x_weighted_len(candidate, url) <= TWEET_LIMIT:
+            lines.append(line)
         else:
             break
     if not lines:   # 1件も入らない極端な場合は最低1件を短縮で
         r = hots[0]
-        lines = [f'★{r["filer"][:10]}→{r["name"][:8]} {pct(r.get("ratio"))}\n']
+        lines = [f'★{r["name"][:8]}({r["code"]}) {pct(r.get("ratio"))}\n']
     return header + "".join(lines) + tail
 
 
@@ -245,17 +271,23 @@ def main():
     if today in st["tweeted"]:
         log("本日はツイート済み。スキップ")
         return
+    # 注目投資家のうち、ツイート除外リスト(Evo Fund等)を除いたものだけツイート対象
+    exclude = load_exclude()
     hots = [r for r in reports if is_notable(r, notable)]
-    if not hots:
-        log("注目投資家の新規なし。ツイートはスキップ")
+    tweet_hots = [r for r in hots if not is_tweet_excluded(r, exclude)]
+    n_excluded = len(hots) - len(tweet_hots)
+    if n_excluded:
+        log(f"ツイート除外: {n_excluded} 件(記事には掲載・ツイートのみ除外)")
+    if not tweet_hots:
+        log("ツイート対象の注目投資家なし(除外後)。ツイートはスキップ")
         return
-    text = build_tweet(reports, notable, post_url, date_jp)
+    text = build_tweet(tweet_hots, post_url, date_jp)
     log(f"ツイート本文（{len(text)}字）:\n{text}")
     try:
         resp = x_client().create_tweet(text=text)
         st["tweeted"].append(today)
         save_state(st)
-        log(f"ツイート完了（注目 {len(hots)} 件中、収まるぶん） id={resp.data.get('id')}")
+        log(f"ツイート完了（対象 {len(tweet_hots)} 件中、収まるぶん） id={resp.data.get('id')}")
     except tweepy.Forbidden as e:
         # 403の詳細(重複 duplicate か、権限 permission かを切り分ける)
         detail = getattr(e, "api_messages", None) or getattr(e, "api_errors", None) or str(e)
