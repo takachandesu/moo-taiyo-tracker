@@ -190,7 +190,8 @@ def build_tweet(tweet_hots, url, date_str):
     hots = sorted(tweet_hots, key=lambda x: (x.get("ratio") or 0), reverse=True)  # 保有割合が高い順
     # ヘッダーに実行時刻(分)を入れて毎回ユニークにする(重複403回避)。
     hhmm = tc.now_jst().strftime("%H:%M")
-    header = f"【著名投資家の大量保有】{date_str[5:]} {hhmm}時点\n"
+    header = (f"【著名投資家の大量保有】{date_str[5:]} {hhmm}時点\n"
+              f"全市場対象(中小型・グロース250含む)\n")
     tail = f"\n詳細▼\n{url}\n{HASHTAGS}"
     # 行を1件ずつ足し、ヘッダー+行+末尾の合計がXの上限(280)に収まる範囲だけ採用
     lines = []
