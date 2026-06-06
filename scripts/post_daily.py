@@ -130,15 +130,20 @@ def build_html(reports, notable, date_str):
     return css + head + "".join(rows) + foot
 
 
-def build_title(reports, notable, date_str):
-    names = []
+def build_title(reports, notable, date_str, exclude=None):
+    exclude = exclude or []
+    names = []          # 除外リスト(Evo等)以外の著名投資家
+    names_all = []      # 除外も含む全著名投資家(保険用)
     for r in reports:
         if is_notable(r, notable):
             f = r["filer"]
-            if f not in names:
+            if f not in names_all:
+                names_all.append(f)
+            if not is_tweet_excluded(r, exclude) and f not in names:
                 names.append(f)
-    if names:
-        clean = [n.replace("株式会社", "").strip() for n in names]
+    use = names or names_all   # 除外以外がいればそれを優先。全部除外対象ならやむなく全体から
+    if use:
+        clean = [n.replace("株式会社", "").strip() for n in use]
         tag = "／".join(clean[:2]) + ("他" if len(clean) > 2 else "")
         return f"{date_str} 大量保有報告書（著名投資家：{tag}）"
     return f"{date_str} 大量保有報告書（新規取得 {len(reports)}件）"
@@ -262,13 +267,14 @@ def main():
 
     # 保有割合を付与
     tc.enrich_with_ratio(reports, sleep=0.2)
+    exclude = load_exclude()   # ツイート・タイトルから外す提出者(Evo Fund等)
 
     # ── 記事(1日1本・重複防止) ──
     post_url = st["posted"].get(today)
     if post_url:
         log(f"本日の記事は投稿済み: {post_url}（再投稿しない）")
     else:
-        title = build_title(reports, notable, date_jp)
+        title = build_title(reports, notable, date_jp, exclude)
         html  = build_html(reports, notable, date_jp)
         post_url = wp_create_post(title, html)
         st["posted"][today] = post_url
@@ -280,7 +286,6 @@ def main():
         log("本日はツイート済み。スキップ")
         return
     # 注目投資家のうち、ツイート除外リスト(Evo Fund等)を除いたものだけツイート対象
-    exclude = load_exclude()
     hots = [r for r in reports if is_notable(r, notable)]
     tweet_hots = [r for r in hots if not is_tweet_excluded(r, exclude)]
     n_excluded = len(hots) - len(tweet_hots)
