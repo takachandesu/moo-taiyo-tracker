@@ -83,6 +83,8 @@ ADIA
 ムバダラ
 Ｏａｓｉｓ
 oasis
+NIPPON ACTIVE VALUE FUND
+NAVF
 Ｅｖｏ　Ｆｕｎｄ
 
 # ↓短い英略語(誤爆しやすいので様子見。不要なら # を付けて無効化)
