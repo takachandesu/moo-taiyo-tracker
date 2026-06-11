@@ -37,13 +37,26 @@ jobs:
           X_ACCESS_SECRET: ${{ secrets.X_ACCESS_SECRET }}
         run: python scripts/post_daily.py
       - name: Commit state
+        if: always()
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if ! git diff --quiet -- data/posted.json; then
-            git add data/posted.json
-            git commit -m "update posted/tweeted state [skip ci]"
-            git push
-          else
+          # ★修正点:
+          #   旧コードは `git diff --quiet -- data/posted.json` で判定していたが、
+          #   git diff は「追跡済み(tracked)」ファイルの変更しか見ない。
+          #   初回の posted.json は未追跡(untracked)なので常に「差分なし」と判定され、
+          #   一度もコミットされず → 状態がrun間で引き継がれず → 二重投稿になっていた。
+          #   そこで先に add し、ステージ済みの差分(--cached)で判定する。
+          if [ ! -f data/posted.json ]; then
+            echo "posted.json が無いためコミットなし(投稿スキップ日)"
+            exit 0
+          fi
+          git add data/posted.json
+          if git diff --cached --quiet; then
             echo "no change"
+          else
+            git commit -m "update posted/tweeted state [skip ci]"
+            # 実行中に別コミットでブランチが進んでいた場合の push 失敗を防ぐ
+            git pull --rebase origin "${GITHUB_REF_NAME}" || true
+            git push
           fi
