@@ -173,12 +173,13 @@ def wp_create_post(title, html):
 
 
 # ── Xの重み付き文字数(全角=2,半角=1, URLは23) ──
-def x_weighted_len(text, url=""):
-    t = text.replace(url, "x" * URL_WEIGHT) if url else text   # URLは23固定として数える
+def x_weighted_len(text, url):
+    t = text.replace(url, "x" * URL_WEIGHT)   # URLは23固定として数える
     w = 0
     for ch in t:
         cp = ord(ch)
-        if (0x1100 <= cp <= 0x115F or 0x2E80 <= cp <= 0x303E or
+        if (0x1100 <= cp <= 0x115F or 0x2190 <= cp <= 0x2BFF or
+            0x2E80 <= cp <= 0x303E or
             0x3041 <= cp <= 0x33FF or 0x3400 <= cp <= 0x4DBF or
             0x4E00 <= cp <= 0x9FFF or 0xA000 <= cp <= 0xA4CF or
             0xAC00 <= cp <= 0xD7A3 or 0xF900 <= cp <= 0xFAFF or
@@ -191,19 +192,19 @@ def x_weighted_len(text, url=""):
 
 
 # ── ツイート組み立て(収まるだけ詰める) ──
-def build_tweet(tweet_hots, date_str):
+def build_tweet(tweet_hots, url, date_str):
     hots = sorted(tweet_hots, key=lambda x: (x.get("ratio") or 0), reverse=True)  # 保有割合が高い順
     # ヘッダーに実行時刻(分)を入れて毎回ユニークにする(重複403回避)。
     hhmm = tc.now_jst().strftime("%H:%M")
     header = (f"【著名投資家の大量保有】{date_str[5:]} {hhmm}時点\n"
               f"全市場対象(中小型・グロース250含む)\n")
-    tail = f"\n詳細はプロフィールのリンクから確認してください\n{HASHTAGS}"
+    tail = f"\nニュース詳細はプロフィールのリンクと固定ポストに。\n{HASHTAGS}"  # URLなし=通常ポスト課金
     # 行を1件ずつ足し、ヘッダー+行+末尾の合計がXの上限(280)に収まる範囲だけ採用
     lines = []
     for r in hots:
         line = f'★{r["filer"][:12]}→{r["name"][:10]}({r["code"]}) {pct(r.get("ratio"))}\n'
         candidate = header + "".join(lines) + line + tail
-        if x_weighted_len(candidate, "") <= TWEET_LIMIT:
+        if x_weighted_len(candidate, url) <= TWEET_LIMIT:
             lines.append(line)
         else:
             break
@@ -282,6 +283,15 @@ def main():
         log(f"記事投稿: {post_url}")
 
     # ── ツイート(注目投資家がいる日だけ・1回・重複防止) ──
+    # 日付ズレ二重ツイート対策:
+    #   GitHubのcron遅延で実行が深夜にずれ込むと「対象日(target)」と「実行日(now)」が
+    #   別日になることがある。posted.json がrun間で保持されていない場合、前回のツイートを
+    #   検知できず同じ報告書を再ツイートしてしまう(例: 6/10の22:41と6/11の01:31)。
+    #   そこで「対象日＝実行日(JST)」のときだけツイートする。日付をまたいだ実行は見送る。
+    #   ※根本対策は post-daily.yml で posted.json をコミットバックすること。これはその保険。
+    if target.date() != now.date():
+        log(f"日付ズレ実行(対象日 {today} / 実行日 {now.date()})。二重ツイート防止のためスキップ")
+        return
     if today in st["tweeted"]:
         log("本日はツイート済み。スキップ")
         return
@@ -294,7 +304,7 @@ def main():
     if not tweet_hots:
         log("ツイート対象の注目投資家なし(除外後)。ツイートはスキップ")
         return
-    text = build_tweet(tweet_hots, date_jp)
+    text = build_tweet(tweet_hots, post_url, date_jp)
     log(f"ツイート本文（{len(text)}字）:\n{text}")
     try:
         resp = x_client().create_tweet(text=text)
