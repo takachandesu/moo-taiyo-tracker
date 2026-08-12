@@ -86,6 +86,8 @@ oasis
 NIPPON ACTIVE VALUE FUND
 NAVF
 ｆｕｎｄｎｏｔｅ
+Ｓｉｔｕａｔｉｏｎａｌ　Ａｗａｒｅｎｅｓｓ　ＬＰ
+Situational Awareness LP
 
 # ↓短い英略語(誤爆しやすいので様子見。不要なら # を付けて無効化)
 c&i
