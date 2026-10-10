@@ -289,9 +289,18 @@ def main():
     #   検知できず同じ報告書を再ツイートしてしまう(例: 6/10の22:41と6/11の01:31)。
     #   そこで「対象日＝実行日(JST)」のときだけツイートする。日付をまたいだ実行は見送る。
     #   ※根本対策は post-daily.yml で posted.json をコミットバックすること。これはその保険。
-    if target.date() != now.date():
-        log(f"日付ズレ実行(対象日 {today} / 実行日 {now.date()})。二重ツイート防止のためスキップ")
+    #
+    # ★ 2026/10/11 修正:
+    #   9/28以降、GitHubのcron遅延で実行が毎日 JST 0〜1時台にずれ込み、
+    #   「対象日 ≠ 実行日」で毎回ツイートがスキップされていた(記事だけ出てツイートが出ない)。
+    #   今は posted.json をコミットバックしていて tweeted で二重ツイートを防げるので、
+    #   「前日分を翌朝9時まで」は遅延実行でもツイートしてよいことにする。
+    days_late = (now.date() - target.date()).days
+    if days_late > 1 or (days_late == 1 and now.hour >= 9):
+        log(f"日付ズレ実行(対象日 {today} / 実行日 {now.date()} {now:%H:%M})。古いのでツイートはスキップ")
         return
+    if days_late == 1:
+        log(f"遅延実行(対象日 {today} / 実行 {now:%m-%d %H:%M})。前日分としてツイートします")
     if today in st["tweeted"]:
         log("本日はツイート済み。スキップ")
         return
